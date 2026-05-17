@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Tic Tac Toe Online</title>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neon Tic Tac Toe</title>
 
-        <style>
+<style>
 body{
     margin:0;
     padding:0;
@@ -17,17 +17,11 @@ body{
     align-items:center;
     justify-content:center;
     min-height:100vh;
-    overflow:hidden;
 }
 
 h1{
     color:#ffeb3b;
-    text-shadow:
-        0 0 8px #ffeb3b,
-        0 0 18px #ff9800,
-        0 0 35px #ff5722;
-    font-size:42px;
-    letter-spacing:2px;
+    text-shadow:0 0 8px #ffeb3b, 0 0 18px #ff9800;
 }
 
 #info{
@@ -35,6 +29,7 @@ h1{
     font-size:22px;
     color:#00e5ff;
     text-shadow:0 0 10px #00e5ff;
+    text-align:center;
 }
 
 #board{
@@ -44,9 +39,7 @@ h1{
     padding:18px;
     border:3px solid #1e90ff;
     border-radius:22px;
-    box-shadow:
-        0 0 15px #1e90ff,
-        inset 0 0 15px #1e90ff;
+    box-shadow:0 0 15px #1e90ff, inset 0 0 15px #1e90ff;
     background:rgba(0,0,30,0.6);
 }
 
@@ -60,23 +53,12 @@ h1{
     cursor:pointer;
     background:#05051f;
     color:white;
-    box-shadow:
-        0 0 8px #00e5ff,
-        inset 0 0 12px rgba(0,229,255,0.35);
-    transition:0.2s;
+    box-shadow:0 0 8px #00e5ff, inset 0 0 12px rgba(0,229,255,0.35);
 }
 
 .cell:hover{
     transform:scale(1.07);
     background:#10104a;
-    box-shadow:
-        0 0 18px #00e5ff,
-        0 0 35px #2979ff,
-        inset 0 0 18px #00e5ff;
-}
-
-.cell:contains("X"){
-    color:#ffeb3b;
 }
 
 #roomText{
@@ -85,39 +67,34 @@ h1{
     font-size:14px;
     text-shadow:0 0 8px #ff4df8;
 }
+
+#playAgainBtn{
+    padding:12px 22px;
+    border:none;
+    border-radius:14px;
+    font-size:18px;
+    font-weight:bold;
+    cursor:pointer;
+    background:#111133;
+    color:#00e5ff;
+    box-shadow:0 0 10px #00e5ff, inset 0 0 10px #00e5ff;
+}
 </style>
-    </head>
+</head>
 
-    <body>
+<body>
 
-        <h1>Tic Tac Toe Online</h1>
+<h1>Neon Tic Tac Toe</h1>
+<div id="info">Connecting...</div>
+<div id="board"></div>
+<div id="roomText"></div>
 
-        <div id="info">Connecting...</div>
-
-        <div id="board"></div>
-
-        <div id="roomText"></div>
-
-        <script type="module">
-
+<script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-
 import {
-    getDatabase,
-    ref,
-    set,
-    get,
-    update,
-    remove,
-    push,
-    onValue,
-    onDisconnect,
-    serverTimestamp
+    getDatabase, ref, set, get, update, remove,
+    push, onValue, onDisconnect, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-
-
-
-// ================= FIREBASE CONFIG =================
 
 const firebaseConfig = {
   apiKey: "AIzaSyB8XY7brewiHkbc5YmcJaXNWMn2qsoU9-E",
@@ -129,8 +106,6 @@ const firebaseConfig = {
   appId: "1:972682364551:web:ff546ee4187b8942db1a22",
   measurementId: "G-JRMK7L1Y3J"
 };
-
-// ====================================================
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
@@ -145,10 +120,6 @@ let roomId = null;
 let myRole = null;
 let gameData = null;
 
-
-
-// ================= START =================
-
 start();
 
 async function start(){
@@ -156,35 +127,31 @@ async function start(){
     listenGame();
 }
 
-
-
-// ================= CREATE / JOIN ROOM =================
-
 async function joinOrCreateRoom(){
-
-    const gamesRef = ref(db, "games");
-    const snapshot = await get(gamesRef);
-
+    const snapshot = await get(ref(db, "games"));
     let foundRoom = null;
 
     if(snapshot.exists()){
-
         const games = snapshot.val();
 
         for(const id in games){
-
             const room = games[id];
 
-            if(room.status === "waiting" && !room.players.player2){
+            if(
+                room.status === "waiting" &&
+                room.players &&
+                room.players.player1 &&
+                !room.players.player2 &&
+                room.connections &&
+                room.connections[room.players.player1]
+            ){
                 foundRoom = id;
                 break;
             }
         }
     }
 
-    // JOIN ROOM
     if(foundRoom){
-
         roomId = foundRoom;
         myRole = "player2";
 
@@ -192,99 +159,80 @@ async function joinOrCreateRoom(){
             "players/player2": playerId,
             status: "playing"
         });
-
-    }
-    // CREATE ROOM
-    else{
-
+    }else{
         const newRoom = push(ref(db, "games"));
-
         roomId = newRoom.key;
         myRole = "player1";
 
         await set(ref(db, "games/" + roomId), {
-
-            players:{
-                player1: playerId
-            },
-
+            players:{ player1: playerId },
             connections:{},
-
             board:["","","","","","","","",""],
-
             turn:"player1",
-
             status:"waiting",
-
             winner:"",
-
             createdAt: serverTimestamp()
         });
     }
 
     roomText.innerText = "Room ID : " + roomId;
-
     setupDisconnect();
 }
 
-
-
-// ================= DISCONNECT SYSTEM =================
-
 async function setupDisconnect(){
-
     const connectionRef = ref(db, `games/${roomId}/connections/${playerId}`);
+    const roomRef = ref(db, `games/${roomId}`);
 
     await set(connectionRef, true);
-
     onDisconnect(connectionRef).remove();
 
-    onValue(ref(db, `games/${roomId}/connections`), async(snapshot)=>{
+    if(myRole === "player1"){
+        const snap = await get(roomRef);
 
+        if(snap.exists() && snap.val().status === "waiting"){
+            onDisconnect(roomRef).remove();
+        }
+    }
+
+    onValue(ref(db, `games/${roomId}/connections`), async()=>{
         setTimeout(async()=>{
+            const roomSnap = await get(roomRef);
+            if(!roomSnap.exists()) return;
 
+            const room = roomSnap.val();
             const check = await get(ref(db, `games/${roomId}/connections`));
 
             if(!check.exists()){
-
-                await remove(ref(db, `games/${roomId}`));
-
-                console.log("Room removed");
+                await remove(roomRef);
+                return;
             }
 
-        },5000);
+            if(room.status === "waiting"){
+                const connections = check.val();
 
+                if(!connections || !connections[room.players.player1]){
+                    await remove(roomRef);
+                }
+            }
+        }, 5000);
     });
 }
 
-
-
-// ================= LISTEN GAME =================
-
 function listenGame(){
-
     onValue(ref(db, "games/" + roomId), (snapshot)=>{
-
         if(!snapshot.exists()){
-
             infoText.innerText = "Room deleted. Refresh page.";
-
             boardDiv.innerHTML = "";
-
             return;
         }
 
         gameData = snapshot.val();
-
         renderBoard();
 
         if(gameData.status === "waiting"){
-
             infoText.innerText = "Waiting for Player 2...";
-
         }
         else if(gameData.status === "playing"){
-
             const myTurn = gameData.turn === myRole;
 
             infoText.innerText =
@@ -293,161 +241,96 @@ function listenGame(){
                 " | " +
                 (myTurn ? "Your Turn" : "Opponent Turn");
         }
-else if(gameData.status === "ended"){
+        else if(gameData.status === "ended"){
+            let msg = "";
 
-    if(gameData.winner === "draw"){
+            if(gameData.winner === "draw") msg = "DRAW";
+            else if(gameData.winner === myRole) msg = "YOU WIN 🎉";
+            else msg = "YOU LOSE 😢";
 
-        infoText.innerHTML = `
-            DRAW<br><br>
-            <button id="playAgainBtn">PLAY AGAIN</button>
-        `;
+            infoText.innerHTML = `
+                ${msg}<br><br>
+                <button id="playAgainBtn">PLAY AGAIN</button>
+            `;
 
-    }else if(gameData.winner === myRole){
-
-        infoText.innerHTML = `
-            YOU WIN 🎉<br><br>
-            <button id="playAgainBtn">PLAY AGAIN</button>
-        `;
-
-    }else{
-
-        infoText.innerHTML = `
-            YOU LOSE 😢<br><br>
-            <button id="playAgainBtn">PLAY AGAIN</button>
-        `;
-    }
-
-    document.getElementById("playAgainBtn").onclick = async ()=>{
-
-        await remove(ref(db, "games/" + roomId));
-
-        location.reload();
-    };
-}
-
+            document.getElementById("playAgainBtn").onclick = async ()=>{
+                await remove(ref(db, "games/" + roomId));
+                location.reload();
+            };
+        }
     });
-
 }
-
-
-
-// ================= RENDER BOARD =================
 
 function renderBoard(){
-
     boardDiv.innerHTML = "";
 
     gameData.board.forEach((value,index)=>{
-
         const btn = document.createElement("button");
-
         btn.className = "cell";
 
-        btn.innerText = value;
+        btn.innerHTML = value === "X"
+            ? `<span style="color:#ffeb3b;text-shadow:0 0 12px #ffeb3b;">X</span>`
+            : value === "O"
+            ? `<span style="color:#ff4df8;text-shadow:0 0 12px #ff4df8;">O</span>`
+            : "";
 
         btn.onclick = ()=>makeMove(index);
-
         boardDiv.appendChild(btn);
     });
 }
 
-
-
-// ================= MAKE MOVE =================
-
 async function makeMove(index){
-
+    if(!gameData) return;
     if(gameData.status !== "playing") return;
-
     if(gameData.turn !== myRole) return;
-
     if(gameData.board[index] !== "") return;
 
     const symbol = myRole === "player1" ? "X" : "O";
-
     const newBoard = [...gameData.board];
-
     newBoard[index] = symbol;
 
     const winner = checkWinner(newBoard);
 
-    // WIN
     if(winner){
-
         await update(ref(db, "games/" + roomId), {
-
             board:newBoard,
-
             status:"ended",
-
             winner: winner === "X" ? "player1" : "player2"
         });
-
         return;
     }
 
-    // DRAW
     if(newBoard.every(cell => cell !== "")){
-
         await update(ref(db, "games/" + roomId), {
-
             board:newBoard,
-
             status:"ended",
-
             winner:"draw"
         });
-
         return;
     }
 
-    // NEXT TURN
     await update(ref(db, "games/" + roomId), {
-
         board:newBoard,
-
         turn: myRole === "player1" ? "player2" : "player1"
     });
-
 }
 
-
-
-// ================= WIN CHECK =================
-
 function checkWinner(board){
-
     const wins = [
-
-        [0,1,2],
-        [3,4,5],
-        [6,7,8],
-
-        [0,3,6],
-        [1,4,7],
-        [2,5,8],
-
-        [0,4,8],
-        [2,4,6]
+        [0,1,2], [3,4,5], [6,7,8],
+        [0,3,6], [1,4,7], [2,5,8],
+        [0,4,8], [2,4,6]
     ];
 
-    for(const combo of wins){
-
-        const [a,b,c] = combo;
-
-        if(
-            board[a] &&
-            board[a] === board[b] &&
-            board[a] === board[c]
-        ){
+    for(const [a,b,c] of wins){
+        if(board[a] && board[a] === board[b] && board[a] === board[c]){
             return board[a];
         }
     }
 
     return null;
 }
-
 </script>
 
-    </body>
+</body>
 </html>
