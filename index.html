@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tic Tac Toe Online</title>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Tic Tac Toe Online</title>
 
-<style>
+        <style>
 body{
     margin:0;
     padding:0;
@@ -86,19 +86,19 @@ h1{
     text-shadow:0 0 8px #ff4df8;
 }
 </style>
-</head>
+    </head>
 
-<body>
+    <body>
 
-<h1>Tic Tac Toe Online</h1>
+        <h1>Tic Tac Toe Online</h1>
 
-<div id="info">Connecting...</div>
+        <div id="info">Connecting...</div>
 
-<div id="board"></div>
+        <div id="board"></div>
 
-<div id="roomText"></div>
+        <div id="roomText"></div>
 
-<script type="module">
+        <script type="module">
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 
@@ -293,27 +293,37 @@ function listenGame(){
                 " | " +
                 (myTurn ? "Your Turn" : "Opponent Turn");
         }
-        else if(gameData.status === "ended"){
+else if(gameData.status === "ended"){
 
-            if(gameData.winner === "draw"){
+    if(gameData.winner === "draw"){
 
-                infoText.innerText = "DRAW";
+        infoText.innerHTML = `
+            DRAW<br><br>
+            <button id="playAgainBtn">PLAY AGAIN</button>
+        `;
 
-            }else if(gameData.winner === myRole){
+    }else if(gameData.winner === myRole){
 
-                infoText.innerText = "YOU WIN 🎉";
+        infoText.innerHTML = `
+            YOU WIN 🎉<br><br>
+            <button id="playAgainBtn">PLAY AGAIN</button>
+        `;
 
-            }else{
+    }else{
 
-                infoText.innerText = "YOU LOSE 😢";
-            }
+        infoText.innerHTML = `
+            YOU LOSE 😢<br><br>
+            <button id="playAgainBtn">PLAY AGAIN</button>
+        `;
+    }
 
-            setTimeout(async()=>{
+    document.getElementById("playAgainBtn").onclick = async ()=>{
 
-                await remove(ref(db, "games/" + roomId));
+        await remove(ref(db, "games/" + roomId));
 
-            },5000);
-        }
+        location.reload();
+    };
+}
 
     });
 
@@ -439,5 +449,5 @@ function checkWinner(board){
 
 </script>
 
-</body>
+    </body>
 </html>
