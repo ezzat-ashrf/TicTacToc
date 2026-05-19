@@ -17,18 +17,19 @@ body{
     display:flex;
     align-items:center;
     justify-content:center;
-    padding:20px;
+    padding:16px;
 }
 
 .wrapper{
     width:100%;
-    max-width:520px;
+    max-width:560px;
     text-align:center;
 }
 
 h1{
     color:#ffeb3b;
     text-shadow:0 0 8px #ffeb3b,0 0 20px #ff9800;
+    margin:10px 0 18px;
 }
 
 input, select{
@@ -65,7 +66,7 @@ button:hover{transform:scale(1.05)}
     display:flex;
     justify-content:space-between;
     gap:10px;
-    margin-bottom:15px;
+    margin-bottom:12px;
 }
 
 .playerCard{
@@ -82,14 +83,14 @@ button:hover{transform:scale(1.05)}
     box-shadow:0 0 18px #ffeb3b;
 }
 
-.avatar{font-size:34px}
+.avatar{font-size:32px}
 .name{font-size:15px;margin-top:4px}
 
 #timer{
     font-size:26px;
     color:#ffeb3b;
     text-shadow:0 0 12px #ffeb3b;
-    margin:10px;
+    margin:8px;
 }
 
 #info{
@@ -101,14 +102,15 @@ button:hover{transform:scale(1.05)}
 
 #boardWrap{
     position:relative;
-    width:min(90vw,360px);
-    height:min(90vw,360px);
+    width:min(88vw,360px);
+    aspect-ratio:1/1;
     margin:auto;
 }
 
 #board{
     display:grid;
     grid-template-columns:repeat(3,1fr);
+    grid-template-rows:repeat(3,1fr);
     gap:10px;
     width:100%;
     height:100%;
@@ -120,6 +122,10 @@ button:hover{transform:scale(1.05)}
 }
 
 .cell{
+    width:100%;
+    height:100%;
+    min-width:0;
+    min-height:0;
     font-size:clamp(36px,12vw,62px);
     font-weight:bold;
     border:2px solid #00e5ff;
@@ -139,6 +145,7 @@ button:hover{transform:scale(1.05)}
     width:0;
     transition:width .5s ease;
     pointer-events:none;
+    z-index:5;
 }
 
 #roomText{
@@ -152,6 +159,7 @@ button:hover{transform:scale(1.05)}
     h1{font-size:28px}
     button{width:90%}
     #players{flex-direction:column}
+    #boardWrap{width:min(94vw,350px)}
 }
 </style>
 </head>
@@ -424,6 +432,7 @@ function listenGame(){
 
         if(gameData.status==="waiting"){
             infoText.innerText = "Waiting for Player 2...";
+            timerText.innerText = turnSeconds;
         }
         else if(gameData.status==="playing"){
             infoText.innerText =
@@ -489,22 +498,32 @@ function startTimer(){
     clearInterval(timerInterval);
 
     timerInterval = setInterval(async()=>{
-        if(!gameData || gameData.status!=="playing") return;
+        if(!gameData || gameData.status !== "playing") return;
 
         const elapsed = Math.floor((Date.now() - gameData.turnStartedAt) / 1000);
         const remaining = Math.max(0, turnSeconds - elapsed);
 
         timerText.innerText = remaining;
 
-        if(remaining <= 0){
+        if(remaining <= 0 && gameData.turn === myRole){
             clearInterval(timerInterval);
 
-            await update(ref(db,"rooms/"+roomCode),{
-                turn: gameData.turn==="player1" ? "player2" : "player1",
+            const roomRef = ref(db, "rooms/" + roomCode);
+            const snap = await get(roomRef);
+
+            if(!snap.exists()) return;
+
+            const latest = snap.val();
+
+            if(latest.status !== "playing") return;
+            if(latest.turn !== myRole) return;
+
+            await update(roomRef, {
+                turn: myRole === "player1" ? "player2" : "player1",
                 turnStartedAt: Date.now()
             });
         }
-    },300);
+    }, 300);
 }
 
 function renderBoard(){
@@ -612,7 +631,7 @@ function drawWinningLine(combo){
 }
 
 function playSound(type){
-    const audio = new AudioContext();
+    const audio = new (window.AudioContext || window.webkitAudioContext)();
     const osc = audio.createOscillator();
     const gain = audio.createGain();
 
