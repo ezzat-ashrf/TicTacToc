@@ -185,6 +185,13 @@ button:hover{transform:scale(1.05)}
 
     <br>
 
+    <select id="modeInput">
+        <option value="normal">Normal Tic Tac Toe</option>
+        <option value="threeMarks">3 Marks Mode</option>
+    </select>
+
+    <br>
+
     <button id="createRoomBtn">CREATE ROOM</button>
     <br>
 
@@ -254,6 +261,16 @@ let myRole = null;
 let gameData = null;
 let timerInterval = null;
 let lastBoardSound = "";
+let isMoving = false;
+let serverOffset = 0;
+
+onValue(ref(db, ".info/serverTimeOffset"), (snap) => {
+    serverOffset = snap.val() || 0;
+});
+
+function serverNow(){
+    return Date.now() + serverOffset;
+}
 
 const lobby = document.getElementById("lobby");
 const game = document.getElementById("game");
@@ -275,6 +292,10 @@ function myProfile(){
     };
 }
 
+function selectedMode(){
+    return document.getElementById("modeInput").value;
+}
+
 function generateRoomCode(){
     return Math.random().toString(36).substring(2,8).toUpperCase();
 }
@@ -286,11 +307,13 @@ async function createRoom(){
     await set(ref(db,"rooms/"+roomCode),{
         roomCode,
         isPrivate:true,
-        players:{ player1: myProfile() },
+        mode:selectedMode(),
+        players:{ player1:myProfile() },
         connections:{},
         board:["","","","","","","","",""],
+        moveHistory:{ player1:[], player2:[] },
         turn:"player1",
-        turnStartedAt: Date.now(),
+        turnStartedAt:serverNow(),
         status:"waiting",
         winner:"",
         winCombo:null,
@@ -316,9 +339,9 @@ async function joinCustomRoom(){
     myRole = "player2";
 
     await update(roomRef,{
-        "players/player2": myProfile(),
+        "players/player2":myProfile(),
         status:"playing",
-        turnStartedAt:Date.now()
+        turnStartedAt:serverNow()
     });
 
     enterGame();
@@ -337,6 +360,7 @@ async function joinRandomRoom(){
             if(
                 room.status==="waiting" &&
                 room.isPrivate===false &&
+                room.mode===selectedMode() &&
                 room.players?.player1 &&
                 !room.players?.player2 &&
                 room.connections &&
@@ -353,9 +377,9 @@ async function joinRandomRoom(){
         myRole = "player2";
 
         await update(ref(db,"rooms/"+roomCode),{
-            "players/player2": myProfile(),
+            "players/player2":myProfile(),
             status:"playing",
-            turnStartedAt:Date.now()
+            turnStartedAt:serverNow()
         });
     }else{
         roomCode = generateRoomCode();
@@ -364,11 +388,13 @@ async function joinRandomRoom(){
         await set(ref(db,"rooms/"+roomCode),{
             roomCode,
             isPrivate:false,
-            players:{ player1: myProfile() },
+            mode:selectedMode(),
+            players:{ player1:myProfile() },
             connections:{},
             board:["","","","","","","","",""],
+            moveHistory:{ player1:[], player2:[] },
             turn:"player1",
-            turnStartedAt:Date.now(),
+            turnStartedAt:serverNow(),
             status:"waiting",
             winner:"",
             winCombo:null,
@@ -387,7 +413,6 @@ function enterGame(){
     lobby.style.display = "none";
     game.style.display = "block";
     roomText.innerText = "Room Code: " + roomCode;
-
     setupDisconnect();
     listenGame();
 }
@@ -435,14 +460,14 @@ function listenGame(){
             timerText.innerText = turnSeconds;
         }
         else if(gameData.status==="playing"){
+            const modeText = gameData.mode==="threeMarks" ? " | 3 Marks Mode" : " | Normal";
             infoText.innerText =
-                gameData.turn === myRole ? "Your Turn" : "Opponent Turn";
+                (gameData.turn === myRole ? "Your Turn" : "Opponent Turn") + modeText;
         }
         else if(gameData.status==="ended"){
             clearInterval(timerInterval);
             timerText.innerText = "0";
             drawWinningLine(gameData.winCombo);
-
             playSound("win");
 
             let msg = gameData.winner==="draw"
@@ -460,8 +485,9 @@ function listenGame(){
             document.getElementById("playAgainBtn").onclick = async()=>{
                 await update(ref(db,"rooms/"+roomCode),{
                     board:["","","","","","","","",""],
+                    moveHistory:{ player1:[], player2:[] },
                     turn:"player1",
-                    turnStartedAt:Date.now(),
+                    turnStartedAt:serverNow(),
                     status:"playing",
                     winner:"",
                     winCombo:null
@@ -500,7 +526,7 @@ function startTimer(){
     timerInterval = setInterval(async()=>{
         if(!gameData || gameData.status !== "playing") return;
 
-        const elapsed = Math.floor((Date.now() - gameData.turnStartedAt) / 1000);
+        const elapsed = Math.floor((serverNow() - gameData.turnStartedAt) / 1000);
         const remaining = Math.max(0, turnSeconds - elapsed);
 
         timerText.innerText = remaining;
@@ -508,7 +534,7 @@ function startTimer(){
         if(remaining <= 0 && gameData.turn === myRole){
             clearInterval(timerInterval);
 
-            const roomRef = ref(db, "rooms/" + roomCode);
+            const roomRef = ref(db,"rooms/"+roomCode);
             const snap = await get(roomRef);
 
             if(!snap.exists()) return;
@@ -518,12 +544,12 @@ function startTimer(){
             if(latest.status !== "playing") return;
             if(latest.turn !== myRole) return;
 
-            await update(roomRef, {
-                turn: myRole === "player1" ? "player2" : "player1",
-                turnStartedAt: Date.now()
+            await update(roomRef,{
+                turn:myRole==="player1" ? "player2" : "player1",
+                turnStartedAt:serverNow()
             });
         }
-    }, 300);
+    },300);
 }
 
 function renderBoard(){
@@ -552,42 +578,69 @@ function renderBoard(){
 }
 
 async function makeMove(index){
+    if(isMoving) return;
     if(!gameData) return;
-    if(gameData.status!=="playing") return;
-    if(gameData.turn!==myRole) return;
-    if(gameData.board[index]!=="") return;
+    if(gameData.status !== "playing") return;
+    if(gameData.turn !== myRole) return;
+    if(gameData.board[index] !== "") return;
 
-    const symbol = myRole==="player1" ? "X" : "O";
-    const newBoard = [...gameData.board];
-    newBoard[index] = symbol;
+    isMoving = true;
 
-    const result = checkWinner(newBoard);
+    try{
+        const symbol = myRole==="player1" ? "X" : "O";
+        const newBoard = [...gameData.board];
 
-    if(result.winner){
+        let moveHistory = gameData.moveHistory || { player1:[], player2:[] };
+
+        if(gameData.mode==="threeMarks"){
+            let myHistory = moveHistory[myRole] || [];
+
+            if(myHistory.length >= 3){
+                const oldestIndex = myHistory.shift();
+                newBoard[oldestIndex] = "";
+            }
+
+            newBoard[index] = symbol;
+            myHistory.push(index);
+            moveHistory[myRole] = myHistory;
+        }else{
+            newBoard[index] = symbol;
+        }
+
+        const result = checkWinner(newBoard);
+
+        if(result.winner){
+            await update(ref(db,"rooms/"+roomCode),{
+                board:newBoard,
+                moveHistory,
+                status:"ended",
+                winner:result.winner==="X" ? "player1" : "player2",
+                winCombo:result.combo
+            });
+            return;
+        }
+
+        if(gameData.mode==="normal" && newBoard.every(c=>c!=="")){
+            await update(ref(db,"rooms/"+roomCode),{
+                board:newBoard,
+                moveHistory,
+                status:"ended",
+                winner:"draw",
+                winCombo:null
+            });
+            return;
+        }
+
         await update(ref(db,"rooms/"+roomCode),{
             board:newBoard,
-            status:"ended",
-            winner: result.winner==="X" ? "player1" : "player2",
-            winCombo: result.combo
+            moveHistory,
+            turn:myRole==="player1" ? "player2" : "player1",
+            turnStartedAt:serverNow()
         });
-        return;
-    }
 
-    if(newBoard.every(c=>c!=="")){
-        await update(ref(db,"rooms/"+roomCode),{
-            board:newBoard,
-            status:"ended",
-            winner:"draw",
-            winCombo:null
-        });
-        return;
+    }finally{
+        isMoving = false;
     }
-
-    await update(ref(db,"rooms/"+roomCode),{
-        board:newBoard,
-        turn: myRole==="player1" ? "player2" : "player1",
-        turnStartedAt: Date.now()
-    });
 }
 
 function checkWinner(board){
@@ -611,14 +664,14 @@ function drawWinningLine(combo){
     if(!combo) return;
 
     const map = {
-        "0,1,2": [8,16,0],
-        "3,4,5": [8,50,0],
-        "6,7,8": [8,84,0],
-        "0,3,6": [17,7,90],
-        "1,4,7": [50,7,90],
-        "2,5,8": [83,7,90],
-        "0,4,8": [14,14,45],
-        "2,4,6": [86,14,135]
+        "0,1,2":[8,16,0],
+        "3,4,5":[8,50,0],
+        "6,7,8":[8,84,0],
+        "0,3,6":[17,7,90],
+        "1,4,7":[50,7,90],
+        "2,5,8":[83,7,90],
+        "0,4,8":[14,14,45],
+        "2,4,6":[86,14,135]
     };
 
     const key = combo.join(",");
