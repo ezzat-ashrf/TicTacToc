@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Neon Tic Tac Toe Lobby</title>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Neon Tic Tac Toe Lobby</title>
 
-<style>
+        <style>
 body{
     margin:0;
     background:radial-gradient(circle,#11113a 0%,#050510 70%);
@@ -93,29 +93,29 @@ button:hover{
     text-shadow:0 0 8px #ff4df8;
 }
 </style>
-</head>
+    </head>
 
-<body>
+    <body>
 
-<h1>Neon Tic Tac Toe</h1>
+        <h1>Neon Tic Tac Toe</h1>
 
-<div id="lobby">
-    <button id="createRoomBtn">CREATE ROOM</button>
-    <br>
-    <input id="roomInput" placeholder="Enter Room Code">
-    <br>
-    <button id="joinCustomBtn">JOIN CUSTOM ROOM</button>
-    <button id="joinRandomBtn">JOIN RANDOM ROOM</button>
-    <p id="lobbyMsg"></p>
-</div>
+        <div id="lobby">
+            <button id="createRoomBtn">CREATE ROOM</button>
+            <br>
+            <input id="roomInput" placeholder="Enter Room Code">
+            <br>
+            <button id="joinCustomBtn">JOIN CUSTOM ROOM</button>
+            <button id="joinRandomBtn">JOIN RANDOM ROOM</button>
+            <p id="lobbyMsg"></p>
+        </div>
 
-<div id="game" style="display:none;">
-    <div id="info">Connecting...</div>
-    <div id="board"></div>
-    <div id="roomText"></div>
-</div>
+        <div id="game" style="display:none;">
+            <div id="info">Connecting...</div>
+            <div id="board"></div>
+            <div id="roomText"></div>
+        </div>
 
-<script type="module">
+        <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
     getDatabase, ref, set, get, update, remove,
@@ -340,6 +340,9 @@ function listenGame(){
                 " | " +
                 (myTurn ? "Your Turn" : "Opponent Turn");
         }
+        else if(gameData.status === "closed"){
+    location.reload();
+}
         else if(gameData.status === "ended"){
             let msg = "";
 
@@ -362,10 +365,11 @@ function listenGame(){
                 });
             };
 
-            document.getElementById("backLobbyBtn").onclick = async ()=>{
-                await remove(ref(db, "rooms/" + roomCode));
-                location.reload();
-            };
+document.getElementById("backLobbyBtn").onclick = async ()=>{
+    await update(ref(db, "rooms/" + roomCode), {
+        status: "closed"
+    });
+};
         }
     });
 }
@@ -441,5 +445,5 @@ function checkWinner(board){
 }
 </script>
 
-</body>
+    </body>
 </html>
