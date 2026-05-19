@@ -98,6 +98,7 @@ button:hover{transform:scale(1.05)}
     color:#00e5ff;
     text-shadow:0 0 10px #00e5ff;
     margin-bottom:14px;
+    min-height:28px;
 }
 
 #boardWrap{
@@ -135,6 +136,11 @@ button:hover{transform:scale(1.05)}
     box-shadow:0 0 8px #00e5ff,inset 0 0 12px rgba(0,229,255,.35);
 }
 
+.cell:disabled{
+    opacity:.75;
+    cursor:not-allowed;
+}
+
 #winLine{
     position:absolute;
     height:8px;
@@ -153,12 +159,36 @@ button:hover{transform:scale(1.05)}
     color:#ff4df8;
     font-size:15px;
     text-shadow:0 0 8px #ff4df8;
+    word-break:break-word;
+}
+
+#lobbyMsg{
+    color:#ff4df8;
+    min-height:24px;
 }
 
 @media(max-width:480px){
+    body{
+        align-items:flex-start;
+        padding-top:10px;
+    }
+
     h1{font-size:28px}
+
     button{width:90%}
-    #players{flex-direction:column}
+
+    #players{
+        flex-direction:row;
+        gap:8px;
+    }
+
+    .playerCard{
+        padding:8px 4px;
+    }
+
+    .avatar{font-size:26px}
+    .name{font-size:13px}
+
     #boardWrap{width:min(94vw,350px)}
 }
 </style>
@@ -181,6 +211,8 @@ button:hover{transform:scale(1.05)}
         <option value="👻">👻</option>
         <option value="🐱">🐱</option>
         <option value="🔥">🔥</option>
+        <option value="🕹️">🕹️</option>
+        <option value="⚡">⚡</option>
     </select>
 
     <br>
@@ -192,7 +224,8 @@ button:hover{transform:scale(1.05)}
 
     <br>
 
-    <button id="createRoomBtn">CREATE ROOM</button>
+    <button id="createRoomBtn">CREATE PRIVATE ROOM</button>
+    <button id="playAiBtn">PLAY WITH AI</button>
     <br>
 
     <input id="roomInput" placeholder="Enter Room Code">
@@ -262,7 +295,9 @@ let gameData = null;
 let timerInterval = null;
 let lastBoardSound = "";
 let isMoving = false;
+let isAiThinking = false;
 let serverOffset = 0;
+let unsubscribeGame = null;
 
 onValue(ref(db, ".info/serverTimeOffset"), (snap) => {
     serverOffset = snap.val() || 0;
@@ -283,6 +318,7 @@ const winLine = document.getElementById("winLine");
 document.getElementById("createRoomBtn").onclick = createRoom;
 document.getElementById("joinCustomBtn").onclick = joinCustomRoom;
 document.getElementById("joinRandomBtn").onclick = joinRandomRoom;
+document.getElementById("playAiBtn").onclick = playWithAI;
 
 function myProfile(){
     return {
@@ -307,6 +343,7 @@ async function createRoom(){
     await set(ref(db,"rooms/"+roomCode),{
         roomCode,
         isPrivate:true,
+        isAI:false,
         mode:selectedMode(),
         players:{ player1:myProfile() },
         connections:{},
@@ -315,6 +352,37 @@ async function createRoom(){
         turn:"player1",
         turnStartedAt:serverNow(),
         status:"waiting",
+        winner:"",
+        winCombo:null,
+        createdAt:serverTimestamp()
+    });
+
+    enterGame();
+}
+
+async function playWithAI(){
+    roomCode = generateRoomCode();
+    myRole = "player1";
+
+    await set(ref(db,"rooms/"+roomCode),{
+        roomCode,
+        isPrivate:true,
+        isAI:true,
+        mode:selectedMode(),
+        players:{
+            player1:myProfile(),
+            player2:{
+                id:"ai_bot",
+                name:"AI Bot",
+                avatar:"🤖"
+            }
+        },
+        connections:{},
+        board:["","","","","","","","",""],
+        moveHistory:{ player1:[], player2:[] },
+        turn:"player1",
+        turnStartedAt:serverNow(),
+        status:"playing",
         winner:"",
         winCombo:null,
         createdAt:serverTimestamp()
@@ -333,6 +401,9 @@ async function joinCustomRoom(){
     if(!snap.exists()) return showLobbyMsg("Room not found");
 
     const room = snap.val();
+
+    if(room.isAI) return showLobbyMsg("This room is AI only");
+    if(room.status !== "waiting") return showLobbyMsg("Room is not available");
     if(room.players?.player2) return showLobbyMsg("Room is full");
 
     roomCode = code;
@@ -360,6 +431,7 @@ async function joinRandomRoom(){
             if(
                 room.status==="waiting" &&
                 room.isPrivate===false &&
+                room.isAI!==true &&
                 room.mode===selectedMode() &&
                 room.players?.player1 &&
                 !room.players?.player2 &&
@@ -388,6 +460,7 @@ async function joinRandomRoom(){
         await set(ref(db,"rooms/"+roomCode),{
             roomCode,
             isPrivate:false,
+            isAI:false,
             mode:selectedMode(),
             players:{ player1:myProfile() },
             connections:{},
@@ -436,14 +509,31 @@ async function setupDisconnect(){
             const roomSnap = await get(roomRef);
             if(!roomSnap.exists()) return;
 
+            const room = roomSnap.val();
+
+            if(room.isAI) return;
+
             const check = await get(ref(db,`rooms/${roomCode}/connections`));
-            if(!check.exists()) await remove(roomRef);
+
+            if(!check.exists()){
+                await remove(roomRef);
+                return;
+            }
+
+            if(room.status === "waiting"){
+                const connections = check.val();
+                if(!connections || !connections[room.players.player1.id]){
+                    await remove(roomRef);
+                }
+            }
         },5000);
     });
 }
 
 function listenGame(){
-    onValue(ref(db,"rooms/"+roomCode),(snapshot)=>{
+    if(unsubscribeGame) unsubscribeGame();
+
+    unsubscribeGame = onValue(ref(db,"rooms/"+roomCode),(snapshot)=>{
         if(!snapshot.exists()){
             location.reload();
             return;
@@ -463,6 +553,10 @@ function listenGame(){
             const modeText = gameData.mode==="threeMarks" ? " | 3 Marks Mode" : " | Normal";
             infoText.innerText =
                 (gameData.turn === myRole ? "Your Turn" : "Opponent Turn") + modeText;
+
+            if(gameData.isAI && gameData.turn === "player2"){
+                scheduleAiMove();
+            }
         }
         else if(gameData.status==="ended"){
             clearInterval(timerInterval);
@@ -531,23 +625,30 @@ function startTimer(){
 
         timerText.innerText = remaining;
 
-        if(remaining <= 0 && gameData.turn === myRole){
+        if(remaining <= 0){
             clearInterval(timerInterval);
 
-            const roomRef = ref(db,"rooms/"+roomCode);
-            const snap = await get(roomRef);
+            if(gameData.isAI && gameData.turn === "player2"){
+                scheduleAiMove(true);
+                return;
+            }
 
-            if(!snap.exists()) return;
+            if(gameData.turn === myRole){
+                const roomRef = ref(db,"rooms/"+roomCode);
+                const snap = await get(roomRef);
 
-            const latest = snap.val();
+                if(!snap.exists()) return;
 
-            if(latest.status !== "playing") return;
-            if(latest.turn !== myRole) return;
+                const latest = snap.val();
 
-            await update(roomRef,{
-                turn:myRole==="player1" ? "player2" : "player1",
-                turnStartedAt:serverNow()
-            });
+                if(latest.status !== "playing") return;
+                if(latest.turn !== myRole) return;
+
+                await update(roomRef,{
+                    turn:myRole==="player1" ? "player2" : "player1",
+                    turnStartedAt:serverNow()
+                });
+            }
         }
     },300);
 }
@@ -572,6 +673,7 @@ function renderBoard(){
             ? `<span style="color:#ff4df8;text-shadow:0 0 12px #ff4df8;">O</span>`
             : "";
 
+        btn.disabled = gameData.status !== "playing" || gameData.turn !== myRole || (gameData.isAI && myRole === "player2");
         btn.onclick = ()=>makeMove(index);
         boardDiv.appendChild(btn);
     });
@@ -643,6 +745,123 @@ async function makeMove(index){
     }
 }
 
+function scheduleAiMove(immediate=false){
+    if(isAiThinking) return;
+    isAiThinking = true;
+
+    setTimeout(async()=>{
+        await aiMove();
+        isAiThinking = false;
+    }, immediate ? 100 : 600);
+}
+
+async function aiMove(){
+    const roomRef = ref(db,"rooms/"+roomCode);
+    const snap = await get(roomRef);
+    if(!snap.exists()) return;
+
+    const latest = snap.val();
+
+    if(!latest.isAI) return;
+    if(latest.status !== "playing") return;
+    if(latest.turn !== "player2") return;
+
+    let board = [...latest.board];
+    let moveIndex = getBestMove(board, "O", "X");
+
+    if(moveIndex === -1) return;
+
+    let moveHistory = latest.moveHistory || { player1:[], player2:[] };
+
+    if(latest.mode === "threeMarks"){
+        let aiHistory = moveHistory.player2 || [];
+
+        if(aiHistory.length >= 3){
+            const oldestIndex = aiHistory.shift();
+            board[oldestIndex] = "";
+        }
+
+        board[moveIndex] = "O";
+        aiHistory.push(moveIndex);
+        moveHistory.player2 = aiHistory;
+    }else{
+        board[moveIndex] = "O";
+    }
+
+    const result = checkWinner(board);
+
+    if(result.winner){
+        await update(roomRef,{
+            board,
+            moveHistory,
+            status:"ended",
+            winner:result.winner === "X" ? "player1" : "player2",
+            winCombo:result.combo
+        });
+        return;
+    }
+
+    if(latest.mode === "normal" && board.every(c=>c !== "")){
+        await update(roomRef,{
+            board,
+            moveHistory,
+            status:"ended",
+            winner:"draw",
+            winCombo:null
+        });
+        return;
+    }
+
+    await update(roomRef,{
+        board,
+        moveHistory,
+        turn:"player1",
+        turnStartedAt:serverNow()
+    });
+}
+
+function getBestMove(board, aiSymbol, humanSymbol){
+    let move = findWinningMove(board, aiSymbol);
+    if(move !== -1) return move;
+
+    move = findWinningMove(board, humanSymbol);
+    if(move !== -1) return move;
+
+    if(board[4] === "") return 4;
+
+    const corners = [0,2,6,8].filter(i => board[i] === "");
+    if(corners.length > 0){
+        return corners[Math.floor(Math.random() * corners.length)];
+    }
+
+    const sides = [1,3,5,7].filter(i => board[i] === "");
+    if(sides.length > 0){
+        return sides[Math.floor(Math.random() * sides.length)];
+    }
+
+    return -1;
+}
+
+function findWinningMove(board, symbol){
+    const wins = [
+        [0,1,2],[3,4,5],[6,7,8],
+        [0,3,6],[1,4,7],[2,5,8],
+        [0,4,8],[2,4,6]
+    ];
+
+    for(const combo of wins){
+        const values = combo.map(i => board[i]);
+        const symbolCount = values.filter(v => v === symbol).length;
+        const emptyCount = values.filter(v => v === "").length;
+
+        if(symbolCount === 2 && emptyCount === 1){
+            return combo[values.indexOf("")];
+        }
+    }
+
+    return -1;
+}
+
 function checkWinner(board){
     const wins = [
         [0,1,2],[3,4,5],[6,7,8],
@@ -684,18 +903,22 @@ function drawWinningLine(combo){
 }
 
 function playSound(type){
-    const audio = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = audio.createOscillator();
-    const gain = audio.createGain();
+    try{
+        const audio = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audio.createOscillator();
+        const gain = audio.createGain();
 
-    osc.connect(gain);
-    gain.connect(audio.destination);
+        osc.connect(gain);
+        gain.connect(audio.destination);
 
-    osc.frequency.value = type==="win" ? 700 : 350;
-    gain.gain.value = 0.08;
+        osc.frequency.value = type==="win" ? 700 : 350;
+        gain.gain.value = 0.08;
 
-    osc.start();
-    osc.stop(audio.currentTime + 0.15);
+        osc.start();
+        osc.stop(audio.currentTime + 0.15);
+    }catch(e){
+        console.log("Sound blocked by browser until user interaction");
+    }
 }
 </script>
 
