@@ -4,69 +4,733 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Neon Tic Tac Toe</title>
+
 <style>
+*{box-sizing:border-box}
+
 body{
     margin:0;
     min-height:100vh;
-    background:#050510;
+    background:radial-gradient(circle,#11113a 0%,#050510 70%);
     color:white;
     font-family:Arial,sans-serif;
     display:flex;
     align-items:center;
     justify-content:center;
+    padding:16px;
 }
-.container{
+
+.wrapper{
+    width:100%;
+    max-width:560px;
     text-align:center;
-    width:95%;
-    max-width:500px;
 }
-button,input,select{
+
+h1{
+    color:#ffeb3b;
+    text-shadow:0 0 8px #ffeb3b,0 0 20px #ff9800;
+    margin:10px 0 18px;
+}
+
+input, select{
+    width:90%;
+    max-width:320px;
+    padding:13px;
     margin:8px;
-    padding:12px;
-    border-radius:10px;
+    border-radius:12px;
+    border:2px solid #00e5ff;
+    background:#05051f;
+    color:white;
+    font-size:17px;
+    text-align:center;
 }
+
+button{
+    padding:12px 22px;
+    margin:8px;
+    border:none;
+    border-radius:14px;
+    font-size:17px;
+    font-weight:bold;
+    cursor:pointer;
+    background:#111133;
+    color:#00e5ff;
+    box-shadow:0 0 10px #00e5ff,inset 0 0 10px #00e5ff;
+}
+
+button:hover{transform:scale(1.05)}
+
+#game{display:none}
+
+#players{
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+    margin-bottom:12px;
+}
+
+.playerCard{
+    flex:1;
+    border:2px solid #1e90ff;
+    border-radius:16px;
+    padding:10px;
+    background:rgba(0,0,40,.6);
+    box-shadow:0 0 10px #1e90ff;
+}
+
+.activePlayer{
+    border-color:#ffeb3b;
+    box-shadow:0 0 18px #ffeb3b;
+}
+
+.avatar{font-size:32px}
+.name{font-size:15px;margin-top:4px}
+
+#timer{
+    font-size:26px;
+    color:#ffeb3b;
+    text-shadow:0 0 12px #ffeb3b;
+    margin:8px;
+}
+
+#info{
+    font-size:20px;
+    color:#00e5ff;
+    text-shadow:0 0 10px #00e5ff;
+    margin-bottom:14px;
+}
+
+#boardWrap{
+    position:relative;
+    width:min(88vw,360px);
+    aspect-ratio:1/1;
+    margin:auto;
+}
+
 #board{
     display:grid;
     grid-template-columns:repeat(3,1fr);
+    grid-template-rows:repeat(3,1fr);
     gap:10px;
-    margin-top:20px;
+    width:100%;
+    height:100%;
+    padding:14px;
+    border:3px solid #1e90ff;
+    border-radius:22px;
+    box-shadow:0 0 15px #1e90ff,inset 0 0 15px #1e90ff;
+    background:rgba(0,0,30,.6);
 }
+
 .cell{
-    aspect-ratio:1/1;
-    font-size:48px;
-    border-radius:14px;
-    background:#111133;
-    color:white;
+    width:100%;
+    height:100%;
+    min-width:0;
+    min-height:0;
+    font-size:clamp(36px,12vw,62px);
+    font-weight:bold;
     border:2px solid #00e5ff;
+    border-radius:18px;
+    cursor:pointer;
+    background:#05051f;
+    box-shadow:0 0 8px #00e5ff,inset 0 0 12px rgba(0,229,255,.35);
+}
+
+#winLine{
+    position:absolute;
+    height:8px;
+    background:#ffeb3b;
+    box-shadow:0 0 15px #ffeb3b,0 0 30px #ff9800;
+    border-radius:20px;
+    transform-origin:left center;
+    width:0;
+    transition:width .5s ease;
+    pointer-events:none;
+    z-index:5;
+}
+
+#roomText{
+    margin-top:16px;
+    color:#ff4df8;
+    font-size:15px;
+    text-shadow:0 0 8px #ff4df8;
+}
+
+@media(max-width:480px){
+    h1{font-size:28px}
+    button{width:90%}
+    #players{flex-direction:column}
+    #boardWrap{width:min(94vw,350px)}
 }
 </style>
 </head>
+
 <body>
 
-<div class="container">
+<div class="wrapper">
+
 <h1>Neon Tic Tac Toe</h1>
 
-<p>
-This downloadable starter file contains:
-<br>
-✔ Multiplayer Lobby
-<br>
-✔ Firebase Realtime Sync
-<br>
-✔ AI Mode
-<br>
-✔ Timer Fix
-<br>
-✔ Normal + 3 Marks Mode
-<br>
-✔ Mobile Responsive UI
-</p>
+<div id="lobby">
+    <input id="nameInput" placeholder="Your Name">
+    <br>
 
-<p>
-Paste the final JavaScript from ChatGPT conversation into this file if needed.
-</p>
+    <select id="avatarInput">
+        <option value="😀">😀</option>
+        <option value="😎">😎</option>
+        <option value="🤖">🤖</option>
+        <option value="👻">👻</option>
+        <option value="🐱">🐱</option>
+        <option value="🔥">🔥</option>
+    </select>
+
+    <br>
+
+    <select id="modeInput">
+        <option value="normal">Normal Tic Tac Toe</option>
+        <option value="threeMarks">3 Marks Mode</option>
+    </select>
+
+    <br>
+    <button id="playAiBtn">PLAY WITH AI</button>
+    <br>
+    <button id="createRoomBtn">CREATE ROOM</button>
+    <br>
+
+    <input id="roomInput" placeholder="Enter Room Code">
+    <br>
+
+    <button id="joinCustomBtn">JOIN CUSTOM ROOM</button>
+    <button id="joinRandomBtn">JOIN RANDOM ROOM</button>
+
+    <p id="lobbyMsg"></p>
+</div>
+
+<div id="game">
+    <div id="players">
+        <div id="p1Card" class="playerCard">
+            <div id="p1Avatar" class="avatar">❔</div>
+            <div id="p1Name" class="name">Player 1</div>
+            <div>X</div>
+        </div>
+
+        <div id="p2Card" class="playerCard">
+            <div id="p2Avatar" class="avatar">❔</div>
+            <div id="p2Name" class="name">Player 2</div>
+            <div>O</div>
+        </div>
+    </div>
+
+    <div id="timer">15</div>
+    <div id="info">Connecting...</div>
+
+    <div id="boardWrap">
+        <div id="board"></div>
+        <div id="winLine"></div>
+    </div>
+
+    <div id="roomText"></div>
+</div>
 
 </div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+    getDatabase, ref, set, get, update, remove,
+    onValue, onDisconnect, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyB8XY7brewiHkbc5YmcJaXNWMn2qsoU9-E",
+  authDomain: "tictactoc-c717e.firebaseapp.com",
+  databaseURL: "https://tictactoc-c717e-default-rtdb.firebaseio.com/",
+  projectId: "tictactoc-c717e",
+  storageBucket: "tictactoc-c717e.firebasestorage.app",
+  messagingSenderId: "972682364551",
+  appId: "1:972682364551:web:ff546ee4187b8942db1a22",
+  measurementId: "G-JRMK7L1Y3J"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+const playerId = "player_" + Math.random().toString(36).substring(2,9);
+const turnSeconds = 15;
+
+let roomCode = null;
+let myRole = null;
+let gameData = null;
+let timerInterval = null;
+let lastBoardSound = "";
+let isMoving = false;
+let serverOffset = 0;
+
+onValue(ref(db, ".info/serverTimeOffset"), (snap) => {
+    serverOffset = snap.val() || 0;
+});
+
+function serverNow(){
+    return Date.now() + serverOffset;
+}
+
+const lobby = document.getElementById("lobby");
+const game = document.getElementById("game");
+const boardDiv = document.getElementById("board");
+const infoText = document.getElementById("info");
+const timerText = document.getElementById("timer");
+const roomText = document.getElementById("roomText");
+const winLine = document.getElementById("winLine");
+
+document.getElementById("createRoomBtn").onclick = createRoom;
+document.getElementById("joinCustomBtn").onclick = joinCustomRoom;
+document.getElementById("joinRandomBtn").onclick = joinRandomRoom;
+document.getElementById("playAiBtn").onclick = playWithAI;
+function myProfile(){
+    return {
+        id: playerId,
+        name: document.getElementById("nameInput").value.trim() || "Player",
+        avatar: document.getElementById("avatarInput").value
+    };
+}
+
+function selectedMode(){
+    return document.getElementById("modeInput").value;
+}
+
+function generateRoomCode(){
+    return Math.random().toString(36).substring(2,8).toUpperCase();
+}
+
+async function createRoom(){
+    roomCode = generateRoomCode();
+    myRole = "player1";
+
+    await set(ref(db,"rooms/"+roomCode),{
+        roomCode,
+        isPrivate:true,
+        mode:selectedMode(),
+        players:{ player1:myProfile() },
+        connections:{},
+        board:["","","","","","","","",""],
+        moveHistory:{ player1:[], player2:[] },
+        turn:"player1",
+        turnStartedAt:serverNow(),
+        status:"waiting",
+        winner:"",
+        winCombo:null,
+        createdAt:serverTimestamp()
+    });
+
+    enterGame();
+}
+
+async function joinCustomRoom(){
+    const code = document.getElementById("roomInput").value.trim().toUpperCase();
+    if(!code) return showLobbyMsg("Enter room code");
+
+    const roomRef = ref(db,"rooms/"+code);
+    const snap = await get(roomRef);
+
+    if(!snap.exists()) return showLobbyMsg("Room not found");
+
+    const room = snap.val();
+    if(room.players?.player2) return showLobbyMsg("Room is full");
+
+    roomCode = code;
+    myRole = "player2";
+
+    await update(roomRef,{
+        "players/player2":myProfile(),
+        status:"playing",
+        turnStartedAt:serverNow()
+    });
+
+    enterGame();
+}
+async function playWithAI(){
+    roomCode = generateRoomCode();
+    myRole = "player1";
+
+    await set(ref(db,"rooms/"+roomCode),{
+        roomCode,
+        isPrivate:true,
+        mode:selectedMode(),
+        isAI:true,
+        players:{
+            player1:myProfile(),
+            player2:{
+                id:"ai_bot",
+                name:"AI Bot",
+                avatar:"🤖"
+            }
+        },
+        connections:{},
+        board:["","","","","","","","",""],
+        moveHistory:{ player1:[], player2:[] },
+        turn:"player1",
+        turnStartedAt:serverNow(),
+        status:"playing",
+        winner:"",
+        winCombo:null,
+        createdAt:serverTimestamp()
+    });
+
+    enterGame();
+}
+
+async function joinRandomRoom(){
+    const snap = await get(ref(db,"rooms"));
+    let found = null;
+
+    if(snap.exists()){
+        const rooms = snap.val();
+
+        for(const id in rooms){
+            const room = rooms[id];
+
+            if(
+                room.status==="waiting" &&
+                room.isPrivate===false &&
+                room.mode===selectedMode() &&
+                room.players?.player1 &&
+                !room.players?.player2 &&
+                room.connections &&
+                room.connections[room.players.player1.id]
+            ){
+                found = id;
+                break;
+            }
+        }
+    }
+
+    if(found){
+        roomCode = found;
+        myRole = "player2";
+
+        await update(ref(db,"rooms/"+roomCode),{
+            "players/player2":myProfile(),
+            status:"playing",
+            turnStartedAt:serverNow()
+        });
+    }else{
+        roomCode = generateRoomCode();
+        myRole = "player1";
+
+        await set(ref(db,"rooms/"+roomCode),{
+            roomCode,
+            isPrivate:false,
+            mode:selectedMode(),
+            players:{ player1:myProfile() },
+            connections:{},
+            board:["","","","","","","","",""],
+            moveHistory:{ player1:[], player2:[] },
+            turn:"player1",
+            turnStartedAt:serverNow(),
+            status:"waiting",
+            winner:"",
+            winCombo:null,
+            createdAt:serverTimestamp()
+        });
+    }
+
+    enterGame();
+}
+
+function showLobbyMsg(msg){
+    document.getElementById("lobbyMsg").innerText = msg;
+}
+
+function enterGame(){
+    lobby.style.display = "none";
+    game.style.display = "block";
+    roomText.innerText = "Room Code: " + roomCode;
+    setupDisconnect();
+    listenGame();
+}
+
+async function setupDisconnect(){
+    const roomRef = ref(db,`rooms/${roomCode}`);
+    const connectionRef = ref(db,`rooms/${roomCode}/connections/${playerId}`);
+
+    await set(connectionRef,true);
+    onDisconnect(connectionRef).remove();
+
+    if(myRole==="player1"){
+        const snap = await get(roomRef);
+        if(snap.exists() && snap.val().status==="waiting"){
+            onDisconnect(roomRef).remove();
+        }
+    }
+
+    onValue(ref(db,`rooms/${roomCode}/connections`),()=>{
+        setTimeout(async()=>{
+            const roomSnap = await get(roomRef);
+            if(!roomSnap.exists()) return;
+
+            const check = await get(ref(db,`rooms/${roomCode}/connections`));
+            if(!check.exists()) await remove(roomRef);
+        },5000);
+    });
+}
+
+function listenGame(){
+    onValue(ref(db,"rooms/"+roomCode),(snapshot)=>{
+        if(!snapshot.exists()){
+            location.reload();
+            return;
+        }
+
+        gameData = snapshot.val();
+
+        updatePlayersUI();
+        renderBoard();
+        startTimer();
+        if(gameData.isAI && gameData.status === "playing" && gameData.turn === "player2"){
+             setTimeout(aiMove, 600);
+        }
+        if(gameData.status==="waiting"){
+            infoText.innerText = "Waiting for Player 2...";
+            timerText.innerText = turnSeconds;
+        }
+        else if(gameData.status==="playing"){
+            const modeText = gameData.mode==="threeMarks" ? " | 3 Marks Mode" : " | Normal";
+            infoText.innerText =
+                (gameData.turn === myRole ? "Your Turn" : "Opponent Turn") + modeText;
+        }
+        else if(gameData.status==="ended"){
+            clearInterval(timerInterval);
+            timerText.innerText = "0";
+            drawWinningLine(gameData.winCombo);
+            playSound("win");
+
+            let msg = gameData.winner==="draw"
+                ? "DRAW"
+                : gameData.winner===myRole
+                ? "YOU WIN 🎉"
+                : "YOU LOSE 😢";
+
+            infoText.innerHTML = `
+                ${msg}<br><br>
+                <button id="playAgainBtn">PLAY AGAIN</button>
+                <button id="backLobbyBtn">BACK TO LOBBY</button>
+            `;
+
+            document.getElementById("playAgainBtn").onclick = async()=>{
+                await update(ref(db,"rooms/"+roomCode),{
+                    board:["","","","","","","","",""],
+                    moveHistory:{ player1:[], player2:[] },
+                    turn:"player1",
+                    turnStartedAt:serverNow(),
+                    status:"playing",
+                    winner:"",
+                    winCombo:null
+                });
+            };
+
+            document.getElementById("backLobbyBtn").onclick = async()=>{
+                await update(ref(db,"rooms/"+roomCode),{
+                    status:"closed"
+                });
+            };
+        }
+        else if(gameData.status==="closed"){
+            location.reload();
+        }
+    });
+}
+
+function updatePlayersUI(){
+    const p1 = gameData.players?.player1;
+    const p2 = gameData.players?.player2;
+
+    document.getElementById("p1Avatar").innerText = p1?.avatar || "❔";
+    document.getElementById("p1Name").innerText = p1?.name || "Waiting";
+
+    document.getElementById("p2Avatar").innerText = p2?.avatar || "❔";
+    document.getElementById("p2Name").innerText = p2?.name || "Waiting";
+
+    document.getElementById("p1Card").classList.toggle("activePlayer", gameData.turn==="player1");
+    document.getElementById("p2Card").classList.toggle("activePlayer", gameData.turn==="player2");
+}
+
+function startTimer(){
+    clearInterval(timerInterval);
+
+    timerInterval = setInterval(async()=>{
+        if(!gameData || gameData.status !== "playing") return;
+
+        const elapsed = Math.floor((serverNow() - gameData.turnStartedAt) / 1000);
+        const remaining = Math.max(0, turnSeconds - elapsed);
+
+        timerText.innerText = remaining;
+
+        if(remaining <= 0 && gameData.turn === myRole){
+            clearInterval(timerInterval);
+
+            const roomRef = ref(db,"rooms/"+roomCode);
+            const snap = await get(roomRef);
+
+            if(!snap.exists()) return;
+
+            const latest = snap.val();
+
+            if(latest.status !== "playing") return;
+            if(latest.turn !== myRole) return;
+
+            await update(roomRef,{
+                turn:myRole==="player1" ? "player2" : "player1",
+                turnStartedAt:serverNow()
+            });
+        }
+    },300);
+}
+
+function renderBoard(){
+    boardDiv.innerHTML = "";
+    winLine.style.width = "0";
+
+    const boardKey = gameData.board.join("");
+    if(lastBoardSound && lastBoardSound !== boardKey && gameData.status==="playing"){
+        playSound("move");
+    }
+    lastBoardSound = boardKey;
+
+    gameData.board.forEach((value,index)=>{
+        const btn = document.createElement("button");
+        btn.className = "cell";
+
+        btn.innerHTML = value==="X"
+            ? `<span style="color:#ffeb3b;text-shadow:0 0 12px #ffeb3b;">X</span>`
+            : value==="O"
+            ? `<span style="color:#ff4df8;text-shadow:0 0 12px #ff4df8;">O</span>`
+            : "";
+
+        btn.onclick = ()=>makeMove(index);
+        boardDiv.appendChild(btn);
+    });
+}
+
+async function makeMove(index){
+    if(isMoving) return;
+    if(!gameData) return;
+    if(gameData.status !== "playing") return;
+    if(gameData.turn !== myRole) return;
+    if(gameData.board[index] !== "") return;
+
+    isMoving = true;
+
+    try{
+        const symbol = myRole==="player1" ? "X" : "O";
+        const newBoard = [...gameData.board];
+
+        let moveHistory = gameData.moveHistory || { player1:[], player2:[] };
+
+        if(gameData.mode==="threeMarks"){
+            let myHistory = moveHistory[myRole] || [];
+
+            if(myHistory.length >= 3){
+                const oldestIndex = myHistory.shift();
+                newBoard[oldestIndex] = "";
+            }
+
+            newBoard[index] = symbol;
+            myHistory.push(index);
+            moveHistory[myRole] = myHistory;
+        }else{
+            newBoard[index] = symbol;
+        }
+
+        const result = checkWinner(newBoard);
+
+        if(result.winner){
+            await update(ref(db,"rooms/"+roomCode),{
+                board:newBoard,
+                moveHistory,
+                status:"ended",
+                winner:result.winner==="X" ? "player1" : "player2",
+                winCombo:result.combo
+            });
+            return;
+        }
+
+        if(gameData.mode==="normal" && newBoard.every(c=>c!=="")){
+            await update(ref(db,"rooms/"+roomCode),{
+                board:newBoard,
+                moveHistory,
+                status:"ended",
+                winner:"draw",
+                winCombo:null
+            });
+            return;
+        }
+
+        await update(ref(db,"rooms/"+roomCode),{
+            board:newBoard,
+            moveHistory,
+            turn:myRole==="player1" ? "player2" : "player1",
+            turnStartedAt:serverNow()
+        });
+
+    }finally{
+        isMoving = false;
+    }
+}
+
+function checkWinner(board){
+    const wins = [
+        [0,1,2],[3,4,5],[6,7,8],
+        [0,3,6],[1,4,7],[2,5,8],
+        [0,4,8],[2,4,6]
+    ];
+
+    for(const combo of wins){
+        const [a,b,c] = combo;
+        if(board[a] && board[a]===board[b] && board[a]===board[c]){
+            return { winner:board[a], combo };
+        }
+    }
+
+    return { winner:null, combo:null };
+}
+
+function drawWinningLine(combo){
+    if(!combo) return;
+
+    const map = {
+        "0,1,2":[8,16,0],
+        "3,4,5":[8,50,0],
+        "6,7,8":[8,84,0],
+        "0,3,6":[17,7,90],
+        "1,4,7":[50,7,90],
+        "2,5,8":[83,7,90],
+        "0,4,8":[14,14,45],
+        "2,4,6":[86,14,135]
+    };
+
+    const key = combo.join(",");
+    const [left,top,rot] = map[key];
+
+    winLine.style.left = left + "%";
+    winLine.style.top = top + "%";
+    winLine.style.transform = `rotate(${rot}deg)`;
+    winLine.style.width = "78%";
+}
+
+function playSound(type){
+    const audio = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audio.createOscillator();
+    const gain = audio.createGain();
+
+    osc.connect(gain);
+    gain.connect(audio.destination);
+
+    osc.frequency.value = type==="win" ? 700 : 350;
+    gain.gain.value = 0.08;
+
+    osc.start();
+    osc.stop(audio.currentTime + 0.15);
+}
+</script>
 
 </body>
 </html>
