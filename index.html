@@ -191,8 +191,7 @@ button:hover{transform:scale(1.05)}
     </select>
 
     <br>
-    <button id="playAiBtn">PLAY WITH AI</button>
-    <br>
+
     <button id="createRoomBtn">CREATE ROOM</button>
     <br>
 
@@ -284,7 +283,7 @@ const winLine = document.getElementById("winLine");
 document.getElementById("createRoomBtn").onclick = createRoom;
 document.getElementById("joinCustomBtn").onclick = joinCustomRoom;
 document.getElementById("joinRandomBtn").onclick = joinRandomRoom;
-document.getElementById("playAiBtn").onclick = playWithAI;
+
 function myProfile(){
     return {
         id: playerId,
@@ -343,36 +342,6 @@ async function joinCustomRoom(){
         "players/player2":myProfile(),
         status:"playing",
         turnStartedAt:serverNow()
-    });
-
-    enterGame();
-}
-async function playWithAI(){
-    roomCode = generateRoomCode();
-    myRole = "player1";
-
-    await set(ref(db,"rooms/"+roomCode),{
-        roomCode,
-        isPrivate:true,
-        mode:selectedMode(),
-        isAI:true,
-        players:{
-            player1:myProfile(),
-            player2:{
-                id:"ai_bot",
-                name:"AI Bot",
-                avatar:"🤖"
-            }
-        },
-        connections:{},
-        board:["","","","","","","","",""],
-        moveHistory:{ player1:[], player2:[] },
-        turn:"player1",
-        turnStartedAt:serverNow(),
-        status:"playing",
-        winner:"",
-        winCombo:null,
-        createdAt:serverTimestamp()
     });
 
     enterGame();
@@ -485,9 +454,7 @@ function listenGame(){
         updatePlayersUI();
         renderBoard();
         startTimer();
-        if(gameData.isAI && gameData.status === "playing" && gameData.turn === "player2"){
-             setTimeout(aiMove, 600);
-        }
+
         if(gameData.status==="waiting"){
             infoText.innerText = "Waiting for Player 2...";
             timerText.innerText = turnSeconds;
