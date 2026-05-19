@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tic Tac Toe</title>
+<title>Neon Tic Tac Toe Lobby</title>
 
 <style>
 body{
@@ -17,17 +17,51 @@ body{
     justify-content:center;
     min-height:100vh;
 }
+
 h1{
     color:#ffeb3b;
     text-shadow:0 0 8px #ffeb3b,0 0 18px #ff9800;
 }
+
+#lobby, #game{
+    text-align:center;
+}
+
+input{
+    padding:12px;
+    border-radius:10px;
+    border:2px solid #00e5ff;
+    background:#05051f;
+    color:white;
+    font-size:18px;
+    text-align:center;
+    margin:10px;
+}
+
+button{
+    padding:12px 22px;
+    margin:8px;
+    border:none;
+    border-radius:14px;
+    font-size:18px;
+    font-weight:bold;
+    cursor:pointer;
+    background:#111133;
+    color:#00e5ff;
+    box-shadow:0 0 10px #00e5ff,inset 0 0 10px #00e5ff;
+}
+
+button:hover{
+    transform:scale(1.05);
+}
+
 #info{
     margin-bottom:20px;
     font-size:22px;
     color:#00e5ff;
     text-shadow:0 0 10px #00e5ff;
-    text-align:center;
 }
+
 #board{
     display:grid;
     grid-template-columns:repeat(3,105px);
@@ -38,6 +72,7 @@ h1{
     box-shadow:0 0 15px #1e90ff,inset 0 0 15px #1e90ff;
     background:rgba(0,0,30,.6);
 }
+
 .cell{
     width:105px;
     height:105px;
@@ -50,42 +85,41 @@ h1{
     color:white;
     box-shadow:0 0 8px #00e5ff,inset 0 0 12px rgba(0,229,255,.35);
 }
-.cell:hover{
-    transform:scale(1.07);
-    background:#10104a;
-}
+
 #roomText{
     margin-top:20px;
     color:#ff4df8;
-    font-size:14px;
+    font-size:16px;
     text-shadow:0 0 8px #ff4df8;
-}
-#playAgainBtn{
-    padding:12px 22px;
-    border:none;
-    border-radius:14px;
-    font-size:18px;
-    font-weight:bold;
-    cursor:pointer;
-    background:#111133;
-    color:#00e5ff;
-    box-shadow:0 0 10px #00e5ff,inset 0 0 10px #00e5ff;
 }
 </style>
 </head>
 
 <body>
 
-<h1>Tic Tac Toe</h1>
-<div id="info">Connecting...</div>
-<div id="board"></div>
-<div id="roomText"></div>
+<h1>Neon Tic Tac Toe</h1>
+
+<div id="lobby">
+    <button id="createRoomBtn">CREATE ROOM</button>
+    <br>
+    <input id="roomInput" placeholder="Enter Room Code">
+    <br>
+    <button id="joinCustomBtn">JOIN CUSTOM ROOM</button>
+    <button id="joinRandomBtn">JOIN RANDOM ROOM</button>
+    <p id="lobbyMsg"></p>
+</div>
+
+<div id="game" style="display:none;">
+    <div id="info">Connecting...</div>
+    <div id="board"></div>
+    <div id="roomText"></div>
+</div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
     getDatabase, ref, set, get, update, remove,
-    push, onValue, onDisconnect, serverTimestamp
+    onValue, onDisconnect, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 const firebaseConfig = {
@@ -102,35 +136,95 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-const infoText = document.getElementById("info");
-const boardDiv = document.getElementById("board");
-const roomText = document.getElementById("roomText");
-
 const playerId = "player_" + Math.random().toString(36).substring(2, 9);
 
-let roomId = null;
+let roomCode = null;
 let myRole = null;
 let gameData = null;
 
-start();
+const lobby = document.getElementById("lobby");
+const game = document.getElementById("game");
+const infoText = document.getElementById("info");
+const boardDiv = document.getElementById("board");
+const roomText = document.getElementById("roomText");
+const lobbyMsg = document.getElementById("lobbyMsg");
 
-async function start(){
-    await joinOrCreateRoom();
-    listenGame();
+document.getElementById("createRoomBtn").onclick = createRoom;
+document.getElementById("joinCustomBtn").onclick = joinCustomRoom;
+document.getElementById("joinRandomBtn").onclick = joinRandomRoom;
+
+function generateRoomCode(){
+    return Math.random().toString(36).substring(2,8).toUpperCase();
 }
 
-async function joinOrCreateRoom(){
-    const snapshot = await get(ref(db, "games"));
+async function createRoom(){
+    roomCode = generateRoomCode();
+    myRole = "player1";
+
+    await set(ref(db, "rooms/" + roomCode), {
+        roomCode: roomCode,
+        isPrivate: true,
+        players:{
+            player1: playerId
+        },
+        connections:{},
+        board:["","","","","","","","",""],
+        turn:"player1",
+        status:"waiting",
+        winner:"",
+        createdAt: serverTimestamp()
+    });
+
+    enterGame();
+}
+
+async function joinCustomRoom(){
+    const input = document.getElementById("roomInput").value.trim().toUpperCase();
+
+    if(input === ""){
+        lobbyMsg.innerText = "Please enter room code";
+        return;
+    }
+
+    const roomRef = ref(db, "rooms/" + input);
+    const snap = await get(roomRef);
+
+    if(!snap.exists()){
+        lobbyMsg.innerText = "Room not found";
+        return;
+    }
+
+    const room = snap.val();
+
+    if(room.players.player2){
+        lobbyMsg.innerText = "Room is full";
+        return;
+    }
+
+    roomCode = input;
+    myRole = "player2";
+
+    await update(roomRef, {
+        "players/player2": playerId,
+        status:"playing"
+    });
+
+    enterGame();
+}
+
+async function joinRandomRoom(){
+    const snap = await get(ref(db, "rooms"));
     let foundRoom = null;
 
-    if(snapshot.exists()){
-        const games = snapshot.val();
+    if(snap.exists()){
+        const rooms = snap.val();
 
-        for(const id in games){
-            const room = games[id];
+        for(const id in rooms){
+            const room = rooms[id];
 
             if(
                 room.status === "waiting" &&
+                room.isPrivate === false &&
                 room.players &&
                 room.players.player1 &&
                 !room.players.player2 &&
@@ -144,28 +238,25 @@ async function joinOrCreateRoom(){
     }
 
     if(foundRoom){
-        roomId = foundRoom;
+        roomCode = foundRoom;
         myRole = "player2";
 
-        await update(ref(db, "games/" + roomId), {
+        await update(ref(db, "rooms/" + roomCode), {
             "players/player2": playerId,
-            status: "playing"
+            status:"playing"
         });
     }else{
-        const newRoom = push(ref(db, "games"));
-        roomId = newRoom.key;
+        roomCode = generateRoomCode();
         myRole = "player1";
 
-        await set(ref(db, "games/" + roomId), {
-            players:{ 
-                player1: playerId 
+        await set(ref(db, "rooms/" + roomCode), {
+            roomCode: roomCode,
+            isPrivate: false,
+            players:{
+                player1: playerId
             },
             connections:{},
             board:["","","","","","","","",""],
-            moveHistory:{
-                player1:[],
-                player2:[]
-            },
             turn:"player1",
             status:"waiting",
             winner:"",
@@ -173,13 +264,22 @@ async function joinOrCreateRoom(){
         });
     }
 
-    roomText.innerText = "Room ID : " + roomId;
+    enterGame();
+}
+
+function enterGame(){
+    lobby.style.display = "none";
+    game.style.display = "block";
+
+    roomText.innerText = "Room Code: " + roomCode;
+
     setupDisconnect();
+    listenGame();
 }
 
 async function setupDisconnect(){
-    const connectionRef = ref(db, `games/${roomId}/connections/${playerId}`);
-    const roomRef = ref(db, `games/${roomId}`);
+    const roomRef = ref(db, `rooms/${roomCode}`);
+    const connectionRef = ref(db, `rooms/${roomCode}/connections/${playerId}`);
 
     await set(connectionRef, true);
     onDisconnect(connectionRef).remove();
@@ -192,13 +292,13 @@ async function setupDisconnect(){
         }
     }
 
-    onValue(ref(db, `games/${roomId}/connections`), async()=>{
+    onValue(ref(db, `rooms/${roomCode}/connections`), async()=>{
         setTimeout(async()=>{
             const roomSnap = await get(roomRef);
             if(!roomSnap.exists()) return;
 
             const room = roomSnap.val();
-            const check = await get(ref(db, `games/${roomId}/connections`));
+            const check = await get(ref(db, `rooms/${roomCode}/connections`));
 
             if(!check.exists()){
                 await remove(roomRef);
@@ -212,14 +312,15 @@ async function setupDisconnect(){
                     await remove(roomRef);
                 }
             }
+
         }, 5000);
     });
 }
 
 function listenGame(){
-    onValue(ref(db, "games/" + roomId), (snapshot)=>{
+    onValue(ref(db, "rooms/" + roomCode), (snapshot)=>{
         if(!snapshot.exists()){
-            infoText.innerText = "Room deleted. Refresh page.";
+            infoText.innerText = "Room deleted. Go back to lobby.";
             boardDiv.innerHTML = "";
             return;
         }
@@ -237,34 +338,33 @@ function listenGame(){
                 "You are " +
                 (myRole === "player1" ? "X" : "O") +
                 " | " +
-                (myTurn ? "Your Turn" : "Opponent Turn") +
-                " | Max 3 marks";
+                (myTurn ? "Your Turn" : "Opponent Turn");
         }
         else if(gameData.status === "ended"){
             let msg = "";
 
-            if(gameData.winner === myRole){
-                msg = "YOU WIN 🎉";
-            }else{
-                msg = "YOU LOSE 😢";
-            }
+            if(gameData.winner === "draw") msg = "DRAW";
+            else if(gameData.winner === myRole) msg = "YOU WIN 🎉";
+            else msg = "YOU LOSE 😢";
 
             infoText.innerHTML = `
                 ${msg}<br><br>
                 <button id="playAgainBtn">PLAY AGAIN</button>
+                <button id="backLobbyBtn">BACK TO LOBBY</button>
             `;
 
             document.getElementById("playAgainBtn").onclick = async ()=>{
-                await update(ref(db, "games/" + roomId), {
+                await update(ref(db, "rooms/" + roomCode), {
                     board:["","","","","","","","",""],
-                    moveHistory:{
-                        player1:[],
-                        player2:[]
-                    },
                     turn:"player1",
                     status:"playing",
                     winner:""
                 });
+            };
+
+            document.getElementById("backLobbyBtn").onclick = async ()=>{
+                await remove(ref(db, "rooms/" + roomCode));
+                location.reload();
             };
         }
     });
@@ -296,39 +396,30 @@ async function makeMove(index){
 
     const symbol = myRole === "player1" ? "X" : "O";
     const newBoard = [...gameData.board];
-
-    let history = gameData.moveHistory || {
-        player1:[],
-        player2:[]
-    };
-
-    let myHistory = history[myRole] || [];
-
-    if(myHistory.length >= 3){
-        const oldestIndex = myHistory.shift();
-        newBoard[oldestIndex] = "";
-    }
-
     newBoard[index] = symbol;
-    myHistory.push(index);
-
-    history[myRole] = myHistory;
 
     const winner = checkWinner(newBoard);
 
     if(winner){
-        await update(ref(db, "games/" + roomId), {
+        await update(ref(db, "rooms/" + roomCode), {
             board:newBoard,
-            moveHistory:history,
             status:"ended",
             winner: winner === "X" ? "player1" : "player2"
         });
         return;
     }
 
-    await update(ref(db, "games/" + roomId), {
+    if(newBoard.every(cell => cell !== "")){
+        await update(ref(db, "rooms/" + roomCode), {
+            board:newBoard,
+            status:"ended",
+            winner:"draw"
+        });
+        return;
+    }
+
+    await update(ref(db, "rooms/" + roomCode), {
         board:newBoard,
-        moveHistory:history,
         turn: myRole === "player1" ? "player2" : "player1"
     });
 }
